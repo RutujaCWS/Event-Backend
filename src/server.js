@@ -43,6 +43,9 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/staff", staffRoutes);
 
+app.get("/", (req, res) => {
+  res.send("API is running...");
+});
 
 
 connectDB().then(() => {
