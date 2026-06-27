@@ -215,7 +215,7 @@ const quotationSchema = new mongoose.Schema(
 
     approvedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Customer",
+      ref: "User",
       default: null,
     },
 
@@ -299,6 +299,7 @@ const quotationSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+   
   },
   {
     timestamps: true,

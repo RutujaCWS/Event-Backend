@@ -2,6 +2,7 @@ import User from "../model/userSchema.js";
 import { sendEmail } from "../services/emailService.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import OTP from "../model/otpModel.js";
 import {
   validateName,
   validateMobile,
@@ -11,8 +12,6 @@ import {
   validateTerms
 } from "../utils/validators.js";
 import Enquiry from "../model/enquirySchema.js";
-
-
 
 // ==================== REGISTER USER (NO TOKEN) ====================
 export const registerUser = async (req, res) => {
@@ -267,6 +266,48 @@ export const resetPassword = async (req, res) => {
   }
 };
 
+export const resetPasswordWithToken = async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { password } = req.body;
+
+    if (!token || !password) {
+      return res.status(400).json({ success: false, message: "Token and password are required." });
+    }
+
+    // 1. Verify the JWT token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    if (!decoded || !decoded.userId) {
+      return res.status(400).json({ success: false, message: "Invalid or expired token." });
+    }
+
+    // 2. Find the user associated with this token
+    const user = await User.findById(decoded.userId);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found." });
+    }
+
+    // 3. Hash the new password and update user record
+    const hashedPassword = await bcrypt.hash(password, 10);
+    user.password = hashedPassword;
+    
+    // Clear lockout status
+    user.loginAttempts = 0;
+    user.lockUntil = null;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: "Password reset successful.",
+    });
+  } catch (error) {
+    console.error("Reset password with token error:", error);
+    if (error.name === "TokenExpiredError") {
+      return res.status(400).json({ success: false, message: "Reset token has expired." });
+    }
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+};
 
 export const myProfile = async (req, res) => {
   try {

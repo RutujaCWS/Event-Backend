@@ -2,6 +2,7 @@ import Quotation from "../../model/quotationSchema.js";
 import { sendEmail } from "../../services/sendEmail.js";
 import mongoose from "mongoose";
 import Enquiry from "../../model/enquirySchema.js";
+import Booking from "../../model/bookingSchema.js"
 
 // Create Quotation
 export const createQuotation = async (req, res) => {
@@ -358,6 +359,27 @@ export const approveQuotation = async (req, res) => {
       });
     }
 
+    const year = new Date().getFullYear();
+
+    const lastBooking = await Booking.findOne()
+      .sort({ createdAt: -1 })
+      .select("bookingId");
+
+    let sequence = 1;
+
+    if (lastBooking?.bookingId) {
+      const lastSequence = parseInt(
+        lastBooking.bookingId.split("-")[2]
+      );
+
+      sequence = lastSequence + 1;
+    }
+
+    const bookingNumber = `BK-${year}-${String(
+      sequence
+    ).padStart(4, "0")}`;
+
+
     quotation.status = "APPROVED";
     quotation.approvedAt = new Date();
     quotation.approvedBy = req.user._id;
@@ -365,11 +387,27 @@ export const approveQuotation = async (req, res) => {
     await quotation.save();
 
     const booking = await Booking.create({
-      leadId: quotation.leadId,
-      customerId: quotation.customerId,
+      bookingId: bookingNumber,
+
       quotationId: quotation._id,
-      totalAmount: quotation.totalAmount,
+
+      leadId: quotation.leadId,
+
+      customerId: quotation.customerId,
+
+      eventType: quotation.eventType,
+
       eventDate: quotation.eventDate,
+
+      totalAmount: quotation.totalAmount,
+
+      advanceAmount: quotation.totalAmount * 0.3,
+
+      balanceAmount:
+        quotation.totalAmount -
+        quotation.totalAmount * 0.3,
+
+      status: "PENDING_PAYMENT",
     });
 
     quotation.bookingCreated = true;
@@ -379,6 +417,8 @@ export const approveQuotation = async (req, res) => {
 
     res.status(200).json({
       success: true,
+      message:
+        "Quotation approved and booking created successfully",
       booking,
       quotation,
     });

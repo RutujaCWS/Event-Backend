@@ -18,6 +18,7 @@ import adminSettingsRoutes from "./routes/admin/adminSettingsRoutes.js";
 
 import cors from "cors";  
 import quotationRoutes from "./routes/admin/quotationRoutes.js";
+import bookingRoutes from "./routes/admin/bookingRoutes.js";
 
     
 
@@ -36,16 +37,14 @@ app.use("/api/auth", userRoutes);
 app.use("/api/cms", cmsRoutes);
 app.use("/api/enquiries", enquiryRoutes);
 
-app.use("/api/quotations", quotationRoutes);    
+app.use("/api/quotations", quotationRoutes);  
+app.use("/api/bookings", bookingRoutes);  
 
 app.use("/api/gallery", galleryRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/staff", staffRoutes);
 
-app.get("/", (req, res) => {
-  res.send("API is running...");
-});
 
 
 connectDB().then(() => {
