@@ -42,6 +42,10 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/staff", staffRoutes);
 
+app.get("/", (req,res)=>{
+  res.json({message: "API is running.............."})
+})
+
 // 🔔 Mount notification routes
 app.use("/api/notifications", notificationRoutes);
 
