@@ -6,9 +6,7 @@ import { dirname, join } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const envPath = join(__dirname, '..', '.env');
-
 // dotenv.config({ path: envPath, debug: true });
-
 import connectDB from "./config/db.js";
 import userRoutes from "./routes/userRoutes.js";
 import cmsRoutes from "./routes/admin/cmsRoutes.js";
@@ -20,13 +18,12 @@ import cors from "cors";
 import quotationRoutes from "./routes/admin/quotationRoutes.js";
 import bookingRoutes from "./routes/admin/bookingRoutes.js";
 
-    
-
+import notificationRoutes from "./routes/notificationRoutes.js";
+  
 dotenv.config();
 // import leadRoutes from "./routes/admin/leadRoutes.js";
 import adminRoutes from "./routes/admin/adminRoutes.js";
 import staffRoutes from "./routes/staff/staffRoutes.js";
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -45,6 +42,8 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/staff", staffRoutes);
 
+// 🔔 Mount notification routes
+app.use("/api/notifications", notificationRoutes);
 
 
 connectDB().then(() => {

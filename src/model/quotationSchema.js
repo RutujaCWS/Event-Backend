@@ -320,7 +320,18 @@ quotationSchema.index(
     }
   }
 );
+// ========== CASCADE DELETE NOTIFICATIONS ==========
+quotationSchema.pre('findOneAndDelete', async function () {
+  const doc = await this.model.findOne(this.getFilter());
+  if (doc) {
+    await mongoose.model('Notification').deleteMany({ quotationRef: doc._id });
+  }
+});
 
+quotationSchema.pre('deleteOne', { document: true, query: false }, async function () {
+  await mongoose.model('Notification').deleteMany({ quotationRef: this._id });
+});
+// ========== END CASCADE DELETE ==========
 export default mongoose.model(
   "Quotation",
   quotationSchema

@@ -73,6 +73,29 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: "",
     },
+    gstin: {
+      type: String,
+      default: "",
+      trim: true,
+    },
+    eventPreferences: {
+  eventTypes: {
+    type: [String],
+    default: [],
+  },
+  catering: {
+    type: [String],
+    default: [],
+  },
+  venue: {
+    type: [String],
+    default: [],
+  },
+  guests: {
+    type: [String],
+    default: [],
+  },
+},
 
     lastLogin: {
       type: Date,
@@ -134,5 +157,22 @@ const userSchema = new mongoose.Schema(
     timestamps: true,
   }
 );
+
+// ========== CASCADE DELETE NOTIFICATIONS ==========
+userSchema.pre('findOneAndDelete', async function () {
+  const doc = await this.model.findOne(this.getFilter());
+  if (doc) {
+    await mongoose.model('Notification').deleteMany({
+      $or: [{ user: doc._id }, { staffRef: doc._id }]
+    });
+  }
+});
+
+userSchema.pre('deleteOne', { document: true, query: false }, async function () {
+  await mongoose.model('Notification').deleteMany({
+    $or: [{ user: this._id }, { staffRef: this._id }]
+  });
+});
+// ========== END CASCADE DELETE ==========
 
 export default mongoose.model("User", userSchema);

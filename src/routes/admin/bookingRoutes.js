@@ -3,9 +3,11 @@ import {
   getAllBookings,
   getBookingById,
   getCustomerBookings,
-  confirmAdvancePayment,
   cancelBooking,
   getBookingStats,
+  confirmAdvancePayment,
+  confirmBalancePayment,
+  getPaymentSummary
 } from "../../controller/admin/bookingController.js";
 
 import { protect } from "../../middleware/authMiddleware.js";
@@ -26,10 +28,7 @@ router.get("/stats", getBookingStats);
 
 router.get("/:id", getBookingById);
 
-router.put(
-  "/:id/confirm-payment",
-  confirmAdvancePayment
-);
+
 
 
 
@@ -37,5 +36,10 @@ router.put(
   "/:id/cancel",
   cancelBooking
 );
+
+// Payment routes
+router.post("/:id/confirm-advance", confirmAdvancePayment);
+router.post("/:id/confirm-balance", confirmBalancePayment);
+router.get("/:id/payment-summary", getPaymentSummary);
 
 export default router;

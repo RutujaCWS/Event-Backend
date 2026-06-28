@@ -1,8 +1,12 @@
 import Enquiry from "../model/enquirySchema.js";
-import mongoose from "mongoose"; 
-import User from "../model/userSchema.js"
-// CREATE ENQUIRY
+import mongoose from "mongoose";
+import User from "../model/userSchema.js";
 
+// ========== nutan changes -26-06-2026 ==========
+import { getAdminUserIds, createNotificationsForUsers } from "../services/notificationService.js";
+// ========== end nutan changes ==========
+
+// ==================== CREATE ENQUIRY (Logged-in) ====================
 export const createEnquiry = async (req, res) => {
   try {
     const {
@@ -15,12 +19,7 @@ export const createEnquiry = async (req, res) => {
       serviceRequired
     } = req.body;
 
-    if (
-      !eventType ||
-      !eventDate ||
-      !guestCount ||
-      !location
-    ) {
+    if (!eventType || !eventDate || !guestCount || !location) {
       return res.status(400).json({
         success: false,
         message: "Please fill all required fields",
@@ -29,14 +28,13 @@ export const createEnquiry = async (req, res) => {
 
     if (guestCount < 1) {
       return res.status(400).json({
-        success:false,
+        success: false,
         message: "Guest count must be at least 1",
-      })
+      });
     }
 
-      const enquiry = await Enquiry.create({
+    const enquiry = await Enquiry.create({
       customerId: req.user._id,
-
       eventType,
       eventDate,
       guestCount,
@@ -47,6 +45,17 @@ export const createEnquiry = async (req, res) => {
       source: "Customer Portal",
     });
 
+    // ========== nutan changes -26-06-2026 ==========
+    const adminIds = await getAdminUserIds();
+    await createNotificationsForUsers({
+      userIds: adminIds,
+      type: "ENQUIRY",
+      message: `New ${enquiry.eventType} enquiry from ${req.user.name || "Registered Customer"}`,
+      enquiryRef: enquiry._id,
+      triggeredBy: req.user._id,
+    });
+    // ========== end nutan changes ==========
+
     res.status(201).json({
       success: true,
       message: "Enquiry created successfully",
@@ -54,18 +63,15 @@ export const createEnquiry = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-
     res.status(500).json({
       success: false,
       message: "Internal server error",
     });
   }
 };
-// CREATE Public ENQUIRY 
-export const createPublicEnquiry = async (
-  req,
-  res
-) => {
+
+// ==================== CREATE PUBLIC ENQUIRY ====================
+export const createPublicEnquiry = async (req, res) => {
   try {
     const {
       fullName,
@@ -80,15 +86,7 @@ export const createPublicEnquiry = async (
       serviceRequired,
     } = req.body;
 
-    if (
-      !fullName ||
-      !mobileNumber ||
-      !email ||
-      !eventType ||
-      !eventDate ||
-      !guestCount ||
-      !location
-    ) {
+    if (!fullName || !mobileNumber || !email || !eventType || !eventDate || !guestCount || !location) {
       return res.status(400).json({
         success: false,
         message: "Please fill all required fields",
@@ -97,17 +95,12 @@ export const createPublicEnquiry = async (
 
     if (guestCount < 1) {
       return res.status(400).json({
-        success: false, // <-- FIXED: "sucess" to "success"
+        success: false,
         message: "Guest count must be at least 1",
-      })
+      });
     }
 
-    // OPTION 1: Using imported User model (RECOMMENDED)
     const existingUser = await User.findOne({ email });
-    
-    // OPTION 2: Using mongoose.model (if User import not working)
-    // const User = mongoose.model('User');
-    // const existingUser = await User.findOne({ email });
 
     let enquiryData = {
       fullName,
@@ -117,9 +110,9 @@ export const createPublicEnquiry = async (
       eventDate,
       guestCount,
       location,
-      budget: budget || 0, // <-- ADD default value
+      budget: budget || 0,
       description,
-      serviceRequired: serviceRequired || [], // <-- ADD default value
+      serviceRequired: serviceRequired || [],
       source: "Website",
     };
 
@@ -129,21 +122,32 @@ export const createPublicEnquiry = async (
 
     const enquiry = await Enquiry.create(enquiryData);
 
+    // ========== nutan changes -26-06-2026 ==========
+    const adminIds = await getAdminUserIds();
+    await createNotificationsForUsers({
+      userIds: adminIds,
+      type: "ENQUIRY",
+      message: `New ${enquiry.eventType} enquiry from ${fullName || "Guest"}`,
+      enquiryRef: enquiry._id,
+      triggeredBy: null,
+    });
+    // ========== end nutan changes ==========
+
     res.status(201).json({
       success: true,
       message: existingUser ? "Enquiry submitted and linked to your account" : "Enquiry submitted successfully",
       data: enquiry,
     });
   } catch (error) {
-    console.error("Create public enquiry error:", error); // <-- ADD this for debugging
+    console.error("Create public enquiry error:", error);
     res.status(500).json({
       success: false,
-      message: error.message || "Internal server error", // <-- Send actual error
+      message: error.message || "Internal server error",
     });
   }
 };
-// GET ALL ENQUIRIES
 
+// ==================== GET ALL ENQUIRIES (customer) ====================
 export const getAllEnquiries = async (req, res) => {
   try {
     const enquiries = await Enquiry.find({
@@ -151,9 +155,7 @@ export const getAllEnquiries = async (req, res) => {
         { customerId: req.user._id },
         { email: req.user.email }
       ]
-    }).sort({
-      createdAt: -1,
-    });
+    }).sort({ createdAt: -1 });
 
     await Enquiry.updateMany(
       {
@@ -171,6 +173,7 @@ export const getAllEnquiries = async (req, res) => {
       data: enquiries,
     });
   } catch (error) {
+    console.error(error);
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -178,8 +181,7 @@ export const getAllEnquiries = async (req, res) => {
   }
 };
 
-// UPDATE ENQUIRY
-
+// ==================== UPDATE ENQUIRY ====================
 export const updateEnquiry = async (req, res) => {
   try {
     const enquiry = await Enquiry.findOneAndUpdate(
@@ -208,7 +210,6 @@ export const updateEnquiry = async (req, res) => {
     });
   } catch (error) {
     console.error(error);
-
     res.status(500).json({
       success: false,
       message: "Internal server error",
@@ -216,8 +217,7 @@ export const updateEnquiry = async (req, res) => {
   }
 };
 
-// DELETE ENQUIRY
-
+// ==================== DELETE ENQUIRY ====================
 export const deleteEnquiry = async (req, res) => {
   try {
     const enquiry = await Enquiry.findOneAndDelete({
@@ -235,13 +235,16 @@ export const deleteEnquiry = async (req, res) => {
       });
     }
 
+    // ========== nutan changes -26-06-2026 ==========
+    // Notification deletion handled via Mongoose pre-hooks in enquirySchema
+    // ========== end nutan changes ==========
+
     res.status(200).json({
       success: true,
       message: "Enquiry deleted successfully",
     });
   } catch (error) {
     console.error(error);
-
     res.status(500).json({
       success: false,
       message: "Internal server error",

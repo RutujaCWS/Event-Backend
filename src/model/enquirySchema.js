@@ -120,5 +120,17 @@ enquirySchema.pre("save", async function() {
     this.city = parts[0].trim();
   }
 });
+// ========== CASCADE DELETE NOTIFICATIONS ==========
+enquirySchema.pre('findOneAndDelete', async function () {
+  const doc = await this.model.findOne(this.getFilter());
+  if (doc) {
+    await mongoose.model('Notification').deleteMany({ enquiryRef: doc._id });
+  }
+});
+
+enquirySchema.pre('deleteOne', { document: true, query: false }, async function () {
+  await mongoose.model('Notification').deleteMany({ enquiryRef: this._id });
+});
+// ========== END CASCADE DELETE ==========
 
 export default mongoose.model("Enquiry", enquirySchema);

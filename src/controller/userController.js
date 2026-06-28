@@ -13,12 +13,15 @@ import {
 } from "../utils/validators.js";
 import Enquiry from "../model/enquirySchema.js";
 
-// ==================== REGISTER USER (NO TOKEN) ====================
+// ========== nutan changes -26-06-2026 ==========
+import { getAdminUserIds, createNotificationsForUsers, createNotification } from "../services/notificationService.js";
+// ========== end nutan changes ==========
+
+// ==================== REGISTER USER ====================
 export const registerUser = async (req, res) => {
   try {
     const { fullName, mobile, email, password, confirmPassword, termsAccepted } = req.body;
 
-    // Field validations
     const nameErr = validateName(fullName);
     if (nameErr) return res.status(400).json({ success: false, message: nameErr });
 
@@ -37,7 +40,6 @@ export const registerUser = async (req, res) => {
     const termsErr = validateTerms(termsAccepted);
     if (termsErr) return res.status(400).json({ success: false, message: termsErr });
 
-    // Check duplicate email/mobile
     const existingUser = await User.findOne({ $or: [{ email }, { mobile }] });
     if (existingUser) {
       if (existingUser.email === email) {
@@ -61,15 +63,28 @@ export const registerUser = async (req, res) => {
       termsAccepted: true,
     });
 
+    // Link existing enquiries
     await Enquiry.updateMany(
-      { 
-        email: user.email,
-        customerId: null 
-      },
-      { 
-        customerId: user._id 
-      }
+      { email: user.email, customerId: null },
+      { customerId: user._id }
     );
+
+    // ========== nutan changes -26-06-2026 ==========
+    const adminIds = await getAdminUserIds();
+    await createNotificationsForUsers({
+      userIds: adminIds,
+      type: "SYSTEM_ALERT",
+      message: `New customer ${fullName} (${email}) has registered.`,
+      triggeredBy: user._id,
+    });
+
+    await createNotification({
+      userId: user._id,
+      type: "SYSTEM_ALERT",
+      message: `Welcome ${fullName}! Your account has been created successfully.`,
+      triggeredBy: user._id,
+    });
+    // ========== end nutan changes ==========
 
     res.status(201).json({
       success: true,
@@ -88,6 +103,7 @@ export const registerUser = async (req, res) => {
   }
 };
 
+// ==================== LOGIN USER ====================
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -96,57 +112,50 @@ export const loginUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "Email and password are required" });
     }
 
-    // 1. Find user by email only
     const user = await User.findOne({ email: email.toLowerCase() });
     if (!user) {
       return res.status(401).json({ success: false, message: "Invalid email or password" });
     }
 
-    // 2. Ensure account is active
     if (!user.isActive) {
       return res.status(403).json({ success: false, message: "Account is disabled. Contact admin." });
     }
 
-    // 3. Ensure account is not temporarily locked
     if (user.lockUntil && user.lockUntil > Date.now()) {
       const remainingTime = Math.ceil((user.lockUntil - Date.now()) / 60000);
-      return res.status(423).json({ 
-        success: false, 
-        message: `Account is temporarily locked. Try again in ${remainingTime} minutes.` 
+      return res.status(423).json({
+        success: false,
+        message: `Account is temporarily locked. Try again in ${remainingTime} minutes.`
       });
     }
 
-    // 4. Verify password
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      // Failed login: Increment attempts
       user.loginAttempts += 1;
-      
+
       if (user.loginAttempts >= 5) {
-        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes lockout
-        user.loginAttempts = 0; // Reset counter for next cycle
+        user.lockUntil = new Date(Date.now() + 15 * 60 * 1000);
+        user.loginAttempts = 0;
         await user.save();
-        return res.status(423).json({ 
-          success: false, 
-          message: "Too many failed attempts. Account locked for 15 minutes." 
+        return res.status(423).json({
+          success: false,
+          message: "Too many failed attempts. Account locked for 15 minutes."
         });
       }
-      
+
       await user.save();
       const remainingAttempts = 5 - user.loginAttempts;
-      return res.status(401).json({ 
-        success: false, 
-        message: `Invalid email or password. ${remainingAttempts} attempts remaining.` 
+      return res.status(401).json({
+        success: false,
+        message: `Invalid email or password. ${remainingAttempts} attempts remaining.`
       });
     }
 
-    // 5. Success: Clear lockout counters
     user.loginAttempts = 0;
     user.lockUntil = null;
     user.lastLogin = new Date();
     await user.save();
 
-    // 6. Generate token with the configurable session timeout
     const token = jwt.sign(
       { userId: user._id, role: user.role },
       process.env.JWT_SECRET,
@@ -171,6 +180,7 @@ export const loginUser = async (req, res) => {
   }
 };
 
+// ==================== FORGOT PASSWORD ====================
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
@@ -190,8 +200,7 @@ export const forgotPassword = async (req, res) => {
       { expiresIn: "15m" }
     );
 
-    const resetLink =
-      `http://localhost:5173/reset-password/${token}`;
+    const resetLink = `http://localhost:5173/reset-password/${token}`;
 
     const html = `
       <h2>Reset Password</h2>
@@ -199,11 +208,7 @@ export const forgotPassword = async (req, res) => {
       <a href="${resetLink}">${resetLink}</a>
     `;
 
-    await sendEmail(
-      user.email,
-      "Password Reset Link",
-      html
-    );
+    await sendEmail(user.email, "Password Reset Link", html);
 
     res.json({
       success: true,
@@ -218,6 +223,7 @@ export const forgotPassword = async (req, res) => {
   }
 };
 
+// ==================== RESET PASSWORD (with OTP) ====================
 export const resetPassword = async (req, res) => {
   try {
     const { mobile, otpCode, password } = req.body;
@@ -226,13 +232,11 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Mobile, OTP, and new password are required." });
     }
 
-    // 1. Verify that the user exists
     const user = await User.findOne({ mobile });
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
     }
 
-    // 2. Find and verify matching OTP
     const otpRecord = await OTP.findOne({
       identifier: mobile,
       code: otpCode,
@@ -244,16 +248,12 @@ export const resetPassword = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid or expired OTP." });
     }
 
-    // 3. Hash the new password and update user record
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
-    
-    // Clear any lockout block if they reset successfully
     user.loginAttempts = 0;
     user.lockUntil = null;
     await user.save();
 
-    // 4. Delete the used OTP
     await OTP.deleteOne({ _id: otpRecord._id });
 
     res.json({
@@ -265,7 +265,73 @@ export const resetPassword = async (req, res) => {
     res.status(500).json({ success: false, message: "Internal server error" });
   }
 };
+export const changePassword = async (req, res) => {
+  try {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
 
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
+
+    const user = await User.findById(req.user._id);
+
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+
+    if (!isMatch) {
+      return res.status(400).json({
+        success: false,
+        message: "Current password is incorrect",
+      });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "New password must be different from current password",
+      });
+    }
+
+    const passwordError = validatePassword(newPassword);
+
+    if (passwordError) {
+      return res.status(400).json({
+        success: false,
+        message: passwordError,
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    user.password = hashedPassword;
+
+    await user.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Password updated successfully",
+    });
+
+  } catch (error) {
+    console.error("Change Password Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+// ==================== RESET PASSWORD (with Token) ====================
 export const resetPasswordWithToken = async (req, res) => {
   try {
     const { token } = req.params;
@@ -275,23 +341,18 @@ export const resetPasswordWithToken = async (req, res) => {
       return res.status(400).json({ success: false, message: "Token and password are required." });
     }
 
-    // 1. Verify the JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     if (!decoded || !decoded.userId) {
       return res.status(400).json({ success: false, message: "Invalid or expired token." });
     }
 
-    // 2. Find the user associated with this token
     const user = await User.findById(decoded.userId);
     if (!user) {
       return res.status(404).json({ success: false, message: "User not found." });
     }
 
-    // 3. Hash the new password and update user record
     const hashedPassword = await bcrypt.hash(password, 10);
     user.password = hashedPassword;
-    
-    // Clear lockout status
     user.loginAttempts = 0;
     user.lockUntil = null;
     await user.save();
@@ -309,6 +370,7 @@ export const resetPasswordWithToken = async (req, res) => {
   }
 };
 
+// ==================== MY PROFILE ====================
 export const myProfile = async (req, res) => {
   try {
     res.status(200).json({
@@ -318,10 +380,139 @@ export const myProfile = async (req, res) => {
     });
   } catch (error) {
     console.error("Profile error:", error);
-
     res.status(500).json({
       success: false,
       message: "Internal server error",
+    });
+  }
+};
+
+export const updateProfile = async (req, res) => {
+  try {
+    const {
+      name,
+      mobile,
+      emergencyContact,
+      address,
+      profileImage,
+        gstin,
+        eventPreferences,
+    } = req.body;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        name,
+        mobile,
+        emergencyContact,
+        address,
+        profileImage,
+          gstin,
+           eventPreferences,
+      },
+      { new: true, runValidators: true }
+    ).select("-password -otp -otpExpiry");
+
+    res.status(200).json({
+      success: true,
+      message: "Profile updated successfully",
+      user,
+    });
+  } catch (error) {
+    console.error("Update profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const getProfileStats = async (req, res) => {
+  try {
+    const totalEnquiries = await Enquiry.countDocuments({
+      customerId: req.user._id,
+    });
+
+    const convertedEvents = await Enquiry.countDocuments({
+      customerId: req.user._id,
+      status: "Converted",
+    });
+
+    const quotationsSent = await Enquiry.countDocuments({
+      customerId: req.user._id,
+      status: "Quotation Sent",
+    });
+
+    const pendingEnquiries = await Enquiry.countDocuments({
+      customerId: req.user._id,
+      status: "New",
+    });
+
+    res.status(200).json({
+      success: true,
+      totalEnquiries,
+      convertedEvents,
+      quotationsSent,
+      pendingEnquiries,
+    });
+  } catch (error) {
+    console.error("Profile stats error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+
+export const getRecentEnquiries = async (req, res) => {
+  try {
+    const enquiries = await Enquiry.find({
+      customerId: req.user._id,
+    })
+      .sort({ createdAt: -1 })
+      .limit(5);
+
+    res.status(200).json({
+      success: true,
+      enquiries,
+    });
+  } catch (error) {
+    console.error("Recent enquiries error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
+export const uploadProfileImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({
+        success: false,
+        message: "No image uploaded",
+      });
+    }
+
+    const imagePath = `/uploads/${req.file.filename}`;
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      {
+        profileImage: imagePath,
+      },
+      { new: true }
+    );
+
+    res.status(200).json({
+      success: true,
+      profileImage: imagePath,
+      user,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({
+      success: false,
+      message: "Upload failed",
     });
   }
 };

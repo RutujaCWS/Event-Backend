@@ -1,10 +1,11 @@
 import User from "../../model/userSchema.js";
 import bcrypt from "bcryptjs";
 
-// ==================== HELPER FUNCTION ====================
+// ========== nutan changes -26-06-2026 ==========
+import { getAdminUserIds, createNotificationsForUsers, createNotification } from "../../services/notificationService.js";
+// ========== end nutan changes -26-06-2026 ==========
 
 const generateEmployeeId = async () => {
-  // Find staff with an employeeId, sorted descending by employeeId
   const lastStaff = await User.findOne(
     { role: "staff", employeeId: { $exists: true, $ne: null } },
     { employeeId: 1 },
@@ -21,21 +22,16 @@ const generateEmployeeId = async () => {
   return `EMP${nextNumber.toString().padStart(3, '0')}`;
 };
 
-// ==================== USER MANAGEMENT (ADMIN ONLY) ====================
-
-// Get all staff members
+// ==================== GET ALL USERS ====================
 export const getStaffList = async (req, res) => {
   try {
     const { role, status, search } = req.query;
     let query = {};
-    // Role filter (staff or custoomber :) 
     if (role) {
       query.role = role;
-        } else {
-          query.role = { $in: ["staff", "customer"]};
-        }
-
-        // Activa status filter
+    } else {
+      query.role = { $in: ["staff", "customer"]};
+    }
     if (status) {
       query.isActive = status === "active";
     }
@@ -46,17 +42,15 @@ export const getStaffList = async (req, res) => {
         {mobile: {$regex: search, $options: "i"}}
       ];
     }
-    const user = await User.find(query).select("-password -otp -otpExpiry").sort({createdAt: -1});
-    res.status(200).json(user);
+    const users = await User.find(query).select("-password -otp -otpExpiry").sort({createdAt: -1});
+    res.status(200).json(users);
   } catch (error) {
-    console.error("get user list errrrrr:", error);
+    console.error("get user list err:", error);
     res.status(500).json({ success: false, message: "Internal server error"});
   }
 };
 
-
-
-// Get single staff by ID
+// ==================== GET USER BY ID ====================
 export const getStaffById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -71,7 +65,7 @@ export const getStaffById = async (req, res) => {
   }
 };
 
-// Create new staff (employeeId auto-generated)
+// ==================== CREATE STAFF ====================
 export const createStaff = async (req, res) => {
   try {
     const {
@@ -79,12 +73,10 @@ export const createStaff = async (req, res) => {
       emergencyContact, profileImage, address, permissions, isActive
     } = req.body;
 
-    // Validation
     if (!name || !email || !mobile || !password) {
       return res.status(400).json({ success: false, message: "Name, email, mobile and password are required" });
     }
 
-    // Check duplicate email/mobile
     const existing = await User.findOne({ $or: [{ email }, { mobile }] });
     if (existing) {
       if (existing.email === email) {
@@ -95,10 +87,8 @@ export const createStaff = async (req, res) => {
       }
     }
 
-    // Hash password (do once)
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Attempt to save with unique employeeId (retry on duplicate key)
     let saved = false;
     let retries = 0;
     let staff;
@@ -145,7 +135,7 @@ export const createStaff = async (req, res) => {
           retries++;
           continue;
         }
-        throw err; // other error
+        throw err;
       }
     }
 
@@ -158,6 +148,23 @@ export const createStaff = async (req, res) => {
     delete staffResponse.otp;
     delete staffResponse.otpExpiry;
 
+    // ========== nutan changes -26-06-2026 ==========
+    const adminIds = await getAdminUserIds();
+    await createNotificationsForUsers({
+      userIds: adminIds,
+      type: "SYSTEM_ALERT",
+      message: `New staff member ${name} (${email}) has been added.`,
+      triggeredBy: req.user._id,
+    });
+
+    await createNotification({
+      userId: staff._id,
+      type: "SYSTEM_ALERT",
+      message: `Welcome ${name}! You have been added as a staff member. Please log in.`,
+      triggeredBy: req.user._id,
+    });
+    // ========== end nutan changes -26-06-2026 ==========
+
     res.status(201).json({ success: true, message: "Staff created successfully", staff: staffResponse });
   } catch (error) {
     console.error("Create staff error:", error);
@@ -165,7 +172,7 @@ export const createStaff = async (req, res) => {
   }
 };
 
-// Update staff (employeeId cannot be changed, not allowed in updates)
+// ==================== UPDATE STAFF ====================
 export const updateStaff = async (req, res) => {
   try {
     const { id } = req.params;
@@ -181,7 +188,6 @@ export const updateStaff = async (req, res) => {
       if (updates[field] !== undefined) filteredUpdates[field] = updates[field];
     });
 
-    // If password provided, hash it
     if (updates.password && updates.password.trim() !== "") {
       filteredUpdates.password = await bcrypt.hash(updates.password, 10);
     }
@@ -203,7 +209,7 @@ export const updateStaff = async (req, res) => {
   }
 };
 
-// Delete staff
+// ==================== DELETE STAFF ====================
 export const deleteStaff = async (req, res) => {
   try {
     const { id } = req.params;
@@ -218,7 +224,7 @@ export const deleteStaff = async (req, res) => {
   }
 };
 
-// Toggle active status
+// ==================== TOGGLE ACTIVE STATUS ====================
 export const toggleActiveStatus = async (req, res) => {
   try {
     const { id } = req.params;
@@ -232,6 +238,23 @@ export const toggleActiveStatus = async (req, res) => {
     user.isActive = isActive;
     await user.save();
 
+    // ========== nutan changes -26-06-2026 ==========
+    const adminIds = await getAdminUserIds();
+    await createNotificationsForUsers({
+      userIds: adminIds,
+      type: "SYSTEM_ALERT",
+      message: `User ${user.name} (${user.role}) has been ${isActive ? "enabled" : "disabled"}.`,
+      triggeredBy: req.user._id,
+    });
+
+    await createNotification({
+      userId: user._id,
+      type: "SYSTEM_ALERT",
+      message: `Your account has been ${isActive ? "enabled" : "disabled"} by admin.`,
+      triggeredBy: req.user._id,
+    });
+    // ========== end nutan changes -26-06-2026 ==========
+
     res.status(200).json({ success: true, message: `User ${isActive ? "enabled" : "disabled"}`, isActive });
   } catch (error) {
     console.error("Toggle active error:", error);
@@ -239,8 +262,7 @@ export const toggleActiveStatus = async (req, res) => {
   }
 };
 
-// get user registration and active stats
-
+// ==================== GET USER STATS ====================
 export const getUserStats = async (req, res) => {
   try {
     const totalUsers = await User.countDocuments({ role: { $in: ["staff", "customer"]}});
@@ -257,7 +279,7 @@ export const getUserStats = async (req, res) => {
       inactiveUsers
     });
   } catch (error) {
-    console.error("get user stats errrr: ", error);
+    console.error("get user stats error:", error);
     res.status(500).json({ success: false, message: "internal server error" });
   }
 };

@@ -1,6 +1,10 @@
 import Enquiry from "../../model/enquirySchema.js";
 
-// Get paginated, filterable assigned enquiries for the logged‑in staff
+// ========== nutan changes -26-06-2026 ==========
+import { createNotification } from "../../services/notificationService.js";
+// ========== end nutan changes ==========
+
+// ==================== GET ASSIGNED ENQUIRIES ====================
 export const getAssignedEnquiries = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
@@ -36,7 +40,7 @@ export const getAssignedEnquiries = async (req, res) => {
   }
 };
 
-// Get total number of assigned enquiries (for staff dashboard card)
+// ==================== GET ASSIGNED COUNT ====================
 export const getAssignedCount = async (req, res) => {
   try {
     const count = await Enquiry.countDocuments({ assignedTo: req.user.id });
@@ -47,27 +51,45 @@ export const getAssignedCount = async (req, res) => {
   }
 };
 
-// Update enquiry status and optionally add a follow‑up note
+// ==================== UPDATE ENQUIRY STATUS ====================
 export const updateEnquiryStatus = async (req, res) => {
   try {
     const { id } = req.params;
     const { status, note } = req.body;
+
     const updateData = { status };
     if (note) {
       updateData.$push = { followUpNotes: { note, createdAt: new Date(), createdBy: req.user.name } };
     }
+
     const enquiry = await Enquiry.findOneAndUpdate(
       { _id: id, assignedTo: req.user.id },
       updateData,
-      { new: true, runValidators: false }  // ← bypass validation
-    );
+      { new: true, runValidators: false }
+    ).populate("customerId", "name email _id");
+
     if (!enquiry) return res.status(404).json({ success: false, message: "Not assigned to you" });
+
+    // ========== nutan changes -26-06-2026 ==========
+    if (enquiry.customerId) {
+      await createNotification({
+        userId: enquiry.customerId._id,
+        type: "ENQUIRY_STATUS_UPDATED",
+        message: `Your enquiry #${enquiry._id} (${enquiry.eventType}) status has been updated to "${status}".`,
+        enquiryRef: enquiry._id,
+        triggeredBy: req.user._id,
+      });
+    }
+    // ========== end nutan changes ==========
+
     res.json({ success: true, data: enquiry });
   } catch (error) {
+    console.error("Update status error:", error);
     res.status(500).json({ success: false, message: error.message });
   }
 };
-// Get status distribution for assigned enquiries (staff)
+
+// ==================== GET STATUS COUNTS ====================
 export const getAssignedStatusCounts = async (req, res) => {
   try {
     const distribution = await Enquiry.aggregate([
