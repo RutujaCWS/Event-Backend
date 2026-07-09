@@ -1,5 +1,5 @@
 import express from "express";
-import { protect, authorize } from "../../middleware/authMiddleware.js";
+import { protect, authorize, checkPermission } from "../../middleware/authMiddleware.js";
 import {
   getAssignedEnquiries,
   getAssignedCount,
@@ -13,11 +13,11 @@ const router = express.Router();
 router.use(protect);
 router.use(authorize("staff"));
 
-router.get("/enquiries/count", getAssignedCount);       
-router.get("/enquiries/assigned", getAssignedEnquiries);  
+router.get("/enquiries/count", checkPermission("enquiries"), getAssignedCount);
+router.get("/enquiries/assigned", checkPermission("enquiries"), getAssignedEnquiries);
+router.put("/enquiries/:id/status", checkPermission("statusUpdates"), updateEnquiryStatus);
+router.get("/enquiries/status-counts", checkPermission("enquiries"), getAssignedStatusCounts);
 
-router.put("/enquiries/:id/status", updateEnquiryStatus); 
-router.get("/enquiries/status-counts", getAssignedStatusCounts);
 
 
 export default router;

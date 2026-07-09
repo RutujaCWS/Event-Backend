@@ -290,16 +290,29 @@ const quotationSchema = new mongoose.Schema(
     // Notes
     // =========================
 
-    notes: {
+        notes: {
       type: String,
       default: "",
+      maxlength: 50,
+      validate: {
+        validator: function(v) {
+          return /^[a-zA-Z\s]*$/.test(v);
+        },
+        message: "Notes must contain only alphabetic characters and spaces"
+      }
     },
 
     termsAndConditions: {
       type: String,
       default: "",
-    },
-   
+      maxlength: 50,
+      validate: {
+        validator: function(v) {
+          return /^[a-zA-Z\s]*$/.test(v);
+        },
+        message: "Terms & Conditions must contain only alphabetic characters and spaces"
+      }
+    }
   },
   {
     timestamps: true,
@@ -312,12 +325,7 @@ quotationSchema.index(
     leadId: 1,
   },
   {
-    unique: true,
-    partialFilterExpression: {
-      status: {
-        $in: ["DRAFT", "SENT", "VIEWED"]
-      }
-    }
+    unique: true
   }
 );
 // ========== CASCADE DELETE NOTIFICATIONS ==========

@@ -2,6 +2,7 @@ import Notification from '../model/notificationSchema.js';
 
 /**
  * Get notifications for the logged-in user with role-based filtering.
+ * ✅ Admin: all types except LEAD_ASSIGNED, but can see LEAD_ASSIGNED that belong to themselves.
  */
 export const getNotifications = async (req, res) => {
   try {
@@ -10,9 +11,16 @@ export const getNotifications = async (req, res) => {
 
     let query = {};
 
-    // Role-based visibility
     if (req.user.role === 'admin') {
-      query = {};
+      // Admin sees:
+      // - all non-LEAD_ASSIGNED notifications
+      // - plus LEAD_ASSIGNED notifications where the admin is the recipient
+      query = {
+        $or: [
+          { type: { $ne: 'LEAD_ASSIGNED' } },
+          { type: 'LEAD_ASSIGNED', user: req.user._id }
+        ]
+      };
     } else if (req.user.role === 'staff') {
       query = {
         $or: [{ user: req.user._id }, { staffRef: req.user._id }],
@@ -26,7 +34,6 @@ export const getNotifications = async (req, res) => {
         .populate('enquiryRef', 'eventType fullName mobileNumber')
         .populate('quotationRef', 'quotationNumber totalAmount')
         .populate('bookingRef', 'eventDate totalAmount')
-        // .populate('paymentRef', 'amount paymentMethod') // Commented – Payment model may not exist
         .populate('staffRef', 'name email')
         .populate('triggeredBy', 'name')
         .sort({ createdAt: -1 })
@@ -59,13 +66,19 @@ export const getNotifications = async (req, res) => {
 
 /**
  * Get unread notification count for the current user.
+ * ✅ Admin: excludes LEAD_ASSIGNED from count, except their own.
  */
 export const getUnreadCount = async (req, res) => {
   try {
     let query = {};
 
     if (req.user.role === 'admin') {
-      query = {};
+      query = {
+        $or: [
+          { type: { $ne: 'LEAD_ASSIGNED' } },
+          { type: 'LEAD_ASSIGNED', user: req.user._id }
+        ]
+      };
     } else if (req.user.role === 'staff') {
       query = {
         $or: [{ user: req.user._id }, { staffRef: req.user._id }],

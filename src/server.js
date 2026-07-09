@@ -19,11 +19,14 @@ import quotationRoutes from "./routes/admin/quotationRoutes.js";
 import bookingRoutes from "./routes/admin/bookingRoutes.js";
 
 import notificationRoutes from "./routes/notificationRoutes.js";
+import whatsappRoutes from "./routes/whatsappRoutes.js";
   
 dotenv.config();
 // import leadRoutes from "./routes/admin/leadRoutes.js";
 import adminRoutes from "./routes/admin/adminRoutes.js";
 import staffRoutes from "./routes/staff/staffRoutes.js";
+import paymentRoutes from "./routes/admin/paymentRoutes.js";
+import invoiceRoutes from "./routes/admin/invoiceRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -42,13 +45,11 @@ app.use("/api/admin", adminRoutes);
 app.use("/api/admin", adminSettingsRoutes);
 app.use("/api/staff", staffRoutes);
 
-app.get("/", (req,res)=>{
-  res.json({message: "API is running.............."})
-})
-
 // 🔔 Mount notification routes
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/whatsapp", whatsappRoutes);
+app.use("/api/payments", paymentRoutes);
+app.use("/api/invoices", invoiceRoutes);
 
 connectDB().then(() => {
   app.listen(PORT, () => {

@@ -12,6 +12,7 @@ import {
   validateTerms
 } from "../utils/validators.js";
 import Enquiry from "../model/enquirySchema.js";
+import cloudinary from "../config/cloudinary.js";
 
 // ========== nutan changes -26-06-2026 ==========
 import { getAdminUserIds, createNotificationsForUsers, createNotification } from "../services/notificationService.js";
@@ -172,6 +173,7 @@ export const loginUser = async (req, res) => {
         email: user.email,
         mobile: user.mobile,
         role: user.role,
+        permissions: user.permissions,
       },
     });
   } catch (error) {
@@ -392,26 +394,30 @@ export const updateProfile = async (req, res) => {
     const {
       name,
       mobile,
+      email,
       emergencyContact,
       address,
       profileImage,
-        gstin,
-        eventPreferences,
+      gstin,
+      eventPreferences,
     } = req.body;
+
+    const updateData = {
+      name,
+      mobile,
+      email,
+      emergencyContact,
+      address,
+      profileImage,
+      gstin,
+      eventPreferences,
+    };
 
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      {
-        name,
-        mobile,
-        emergencyContact,
-        address,
-        profileImage,
-          gstin,
-           eventPreferences,
-      },
+      updateData,
       { new: true, runValidators: true }
-    ).select("-password -otp -otpExpiry");
+    ).select("-password -loginAttempts -lockUntil");
 
     res.status(200).json({
       success: true,
@@ -484,6 +490,7 @@ export const getRecentEnquiries = async (req, res) => {
     });
   }
 };
+
 export const uploadProfileImage = async (req, res) => {
   try {
     if (!req.file) {
@@ -493,23 +500,36 @@ export const uploadProfileImage = async (req, res) => {
       });
     }
 
-    const imagePath = `/uploads/${req.file.filename}`;
+    // Upload to Cloudinary
+    const result = await new Promise((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        {
+          folder: 'profile_images',
+          transformation: [{ width: 500, height: 500, crop: 'limit' }]
+        },
+        (error, result) => {
+          if (error) reject(error);
+          else resolve(result);
+        }
+      ).end(req.file.buffer);
+    });
 
+    const imageUrl = result.secure_url;
+
+    // Save Cloudinary URL in database
     const user = await User.findByIdAndUpdate(
       req.user._id,
-      {
-        profileImage: imagePath,
-      },
+      { profileImage: imageUrl },
       { new: true }
-    );
+    ).select("-password");
 
     res.status(200).json({
       success: true,
-      profileImage: imagePath,
+      profileImage: imageUrl,
       user,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Upload error:", err);
     res.status(500).json({
       success: false,
       message: "Upload failed",

@@ -1,5 +1,6 @@
 import User from "../../model/userSchema.js";
 import bcrypt from "bcryptjs";
+import AdminSettings from "../../model/adminSettingsSchema.js";
 
 // ========== nutan changes -26-06-2026 ==========
 import { getAdminUserIds, createNotificationsForUsers, createNotification } from "../../services/notificationService.js";
@@ -88,6 +89,17 @@ export const createStaff = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+    // this fetch the default permission from the setting
+    const settings = await AdminSettings.findOne().select("defaultStaffPermissions");
+    const defaultPerms = settings?.defaultStaffPermissions || {
+      enquiries: true,
+      events: true,
+      tasks: true,
+      schedule: true,
+      statusUpdates: true,
+      viewPayments: true,
+      recordPayments: false,
+    }
 
     let saved = false;
     let retries = 0;
@@ -113,15 +125,7 @@ export const createStaff = async (req, res) => {
           pincode: "",
           country: "India",
         },
-        permissions: permissions || {
-          enquiries: true,
-          events: true,
-          tasks: true,
-          schedule: true,
-          statusUpdates: true,
-          viewPayments: true,
-          recordPayments: false,
-        },
+        permissions: permissions || defaultPerms,
         isActive: isActive !== undefined ? isActive : true,
         isMobileVerified: true,
         isEmailVerified: true,

@@ -59,3 +59,28 @@ export const authorize = (...roles) => {
     next();
   };
 };
+
+// middleware to check staff prmission
+export const checkPermission = (permissionName) => {
+  return (req, res, next) => {
+    // admin bypass all permission checks
+    if (req.user && req.user.role === 'admin') {
+      return next();
+    }
+    //check staff permissions
+    if (req.user && req.user.role === "staff") {
+      if (req.user.permissions && req.user.permissions[permissionName] === true) {
+        return next();
+      }
+      return res.status(403).json({
+        success: false,
+        message: `Access denied. you do not have permission for: ${permissionName}`,
+      })
+    }
+    // block other roles (like custum_berrrrr) if they hit staff routes
+    return res.status(403).json({
+      success: false,
+      message: "Access denied."
+    })
+  }
+}

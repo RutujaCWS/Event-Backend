@@ -75,7 +75,8 @@ export const updateEnquiryStatus = async (req, res) => {
       await createNotification({
         userId: enquiry.customerId._id,
         type: "ENQUIRY_STATUS_UPDATED",
-        message: `Your enquiry #${enquiry._id} (${enquiry.eventType}) status has been updated to "${status}".`,
+        // ✅ Staff name added to the message
+        message: `Your enquiry #${enquiry._id} (${enquiry.eventType}) status has been updated to "${status}" by ${req.user.name}.`,
         enquiryRef: enquiry._id,
         triggeredBy: req.user._id,
       });
