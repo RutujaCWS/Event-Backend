@@ -51,6 +51,10 @@ app.use("/api/whatsapp", whatsappRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/invoices", invoiceRoutes);
 
+app.get ("/",(req, res)=>{
+  res.send("API is running.............")
+});
+
 connectDB().then(() => {
   app.listen(PORT, () => {
     console.log("Server started on port", PORT);
