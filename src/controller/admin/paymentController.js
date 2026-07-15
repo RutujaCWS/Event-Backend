@@ -23,13 +23,18 @@ export const createOnlinePaymentOrder = async (req, res) => {
       });
     }
 
-    if (
-      !settings.payment?.razorpayKeyId ||
-      !settings.payment?.razorpayKeySecret
-    ) {
+    const razorpayGateway = settings.payment?.gatewayAccounts?.find(
+      (gateway) =>
+        gateway.type === "RAZORPAY" &&
+        gateway.isActive &&
+        gateway.isConfigured &&
+        gateway.isPrimary
+    );
+    
+    if (!razorpayGateway) {
       return res.status(400).json({
         success: false,
-        message: "Razorpay is not configured."
+        message: "No active Razorpay gateway configured."
       });
     }
 
@@ -97,7 +102,7 @@ export const createOnlinePaymentOrder = async (req, res) => {
         orderId: order.id,
         amount: amount,
         currency: 'INR',
-        keyId: settings.payment.razorpayKeyId,
+        keyId: razorpayGateway.keyId,
         bookingId: booking.bookingId,
         customerName: booking.customerId?.name || 'Guest',
         customerEmail: booking.customerId?.email || '',
@@ -131,7 +136,7 @@ export const verifyPayment = async (req, res) => {
       paymentType 
     } = req.body;
 
-    const isValid = verifyRazorpaySignature(  
+    const isValid = await verifyRazorpaySignature(
       razorpay_order_id,
       razorpay_payment_id,
       razorpay_signature

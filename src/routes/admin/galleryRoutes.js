@@ -16,7 +16,7 @@ router.post(
   upload.single("image"),
   createGalleryEvent
 );
-router.post("/", createGalleryEvent);
+
 
 router.get("/", getGalleryEvents);
 

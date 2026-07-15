@@ -133,13 +133,29 @@ if (section === "why-choose-us") {
     content.rightImage = result.secure_url;
   }
 }
+if (section === "banner") {
+  if (req.files?.bannerImage?.[0]) {
+    const result = await cloudinary.uploader.upload(
+      `data:${req.files.bannerImage[0].mimetype};base64,${req.files.bannerImage[0].buffer.toString("base64")}`,
+      {
+        folder: "event-management/banner",
+      }
+    );
 
+    content.bannerImage = result.secure_url;
+  }
+}
     // Preserve old images if no new image uploaded
     const existing = await CMS.findOne({ section });
  
 
     if (existing) {
-
+// Banner Image
+if (section === "banner") {
+  if (!content.bannerImage) {
+    content.bannerImage = existing.content.bannerImage;
+  }
+}
   // Home Images
   if (section === "home" && existing) {
   if (!content.heroImage1) content.heroImage1 = existing.content.heroImage1;
@@ -174,6 +190,8 @@ if (section === "why-choose-us" && existing) {
   if (!content.rightImage)
     content.rightImage = existing.content.rightImage;
 }
+
+
 }
 
     const updated = await CMS.findOneAndUpdate(

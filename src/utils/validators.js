@@ -25,7 +25,7 @@ export const validateEmail = (email) => {
 
 export const validatePassword = (pwd) => {
   if (!pwd) return "Password is required.";
-  if (pwd.length < 8) return "Minimum 8 characters.";
+  if (pwd.length < 10) return "Minimum 10 characters.";
   if (pwd.length > 20) return "Maximum 20 characters.";
   if (/\s/.test(pwd)) return "Spaces are not allowed.";
   const hasUpper = /[A-Z]/.test(pwd);

@@ -1,6 +1,7 @@
 import User from "../../model/userSchema.js";
 import bcrypt from "bcryptjs";
 import AdminSettings from "../../model/adminSettingsSchema.js";
+import { validatePassword, validateName, validateEmail, validateMobile } from "../../utils/validators.js";
 
 // ========== nutan changes -26-06-2026 ==========
 import { getAdminUserIds, createNotificationsForUsers, createNotification } from "../../services/notificationService.js";
@@ -77,6 +78,18 @@ export const createStaff = async (req, res) => {
     if (!name || !email || !mobile || !password) {
       return res.status(400).json({ success: false, message: "Name, email, mobile and password are required" });
     }
+
+    const nameErr = validateName(name);
+    if (nameErr) return res.status(400).json({ success: false, message: nameErr });
+
+    const emailErr = validateEmail(email);
+    if (emailErr) return res.status(400).json({ success: false, message: emailErr });
+
+    const mobileErr = validateMobile(mobile);
+    if (mobileErr) return res.status(400).json({ success: false, message: mobileErr });
+
+    const pwdErr = validatePassword(password);
+    if (pwdErr) return res.status(400).json({ success: false, message: pwdErr });
 
     const existing = await User.findOne({ $or: [{ email }, { mobile }] });
     if (existing) {

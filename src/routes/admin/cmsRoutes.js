@@ -31,6 +31,8 @@ router.put(
   { name: "solutionImage", maxCount: 1 },
    { name: "leftImage", maxCount: 1 },
   { name: "rightImage", maxCount: 1 },
+  // Event CMS
+{ name: "bannerImage", maxCount: 1 },
   ]),
   updateCmsSection
 );
